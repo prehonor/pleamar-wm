@@ -16,7 +16,7 @@ pub fn run() -> Result<(), String> {
     let (w, h) = (1920u32, 1080u32);
     // A card that cannot be told a layout: the buffer as its driver lays it out.
     let unlaid = pleamar::dmabuf::without_layouts(gpu.device(), &modifiers);
-    let uses = gbm::BufferObjectFlags::SCANOUT | gbm::BufferObjectFlags::RENDERING;
+    let uses = gbm::BufferObjectFlags::RENDERING;
     let made = if unlaid {
         println!("probe · no layouts to name: the buffer as the driver lays it out");
         device.create_buffer_object::<()>(w, h, gbm::Format::Xrgb8888, uses)
