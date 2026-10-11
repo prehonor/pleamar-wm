@@ -2,7 +2,7 @@
   description = "pleamar-wm: a Wayland compositor whose window manager is a pleamar scene";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     pleamar = {
       url = "github:k4ditano/pleamar/no-layouts";
       inputs.nixpkgs.follows = "nixpkgs";

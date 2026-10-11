@@ -11,6 +11,7 @@
 use pleamar::scene::{Cursor, Mods, Screens, Surface, ToRender};
 use pleamar::wgpu;
 use crate::config;
+use crate::dma_buf_egl::DmaBufEglTexture;
 use crate::layers::{self, MonitorInfo, ToLayers};
 use crate::route::Route;
 use crate::screen::{self, Hit, LayerFrames, LayerWindow, Output, Screen};
@@ -120,6 +121,13 @@ impl DrmOutput {
         // as its driver lays them out, and read back without naming it.
         let unlaid = pleamar::dmabuf::without_layouts(device, modifiers);
         let uses = gbm::BufferObjectFlags::SCANOUT | gbm::BufferObjectFlags::RENDERING;
+        
+        // Check if we need EGL fallback (Vulkan DMA-BUF not available)
+        let use_egl_fallback = device.adapter_info().backend == wgpu::Backend::Gl;
+        if use_egl_fallback {
+            println!("session · {}: using EGL DMA-BUF import for zero-copy rendering", self.name);
+        }
+        
         for _ in 0..3 {
             let made = if unlaid {
                 self.gbm.lock().unwrap().create_buffer_object::<()>(w, h, gbm::Format::Xrgb8888, uses)
@@ -129,17 +137,36 @@ impl DrmOutput {
             let bo = made.map_err(|e| format!("the card did not make a buffer of {w}×{h}: {e}"))?;
             let fd = bo.fd_for_plane(0).map_err(|e| format!("no handle for the buffer: {e}"))?;
             let modifier: u64 = if unlaid { pleamar::dmabuf::NO_LAYOUT } else { bo.modifier().into() };
-            let texture = pleamar::gpu::Gpu::import_dmabuf(
-                device,
-                fd,
-                (w, h),
-                modifier,
-                bo.stride_for_plane(0),
-                bo.offset(0),
-                wgpu::TextureUses::COLOR_TARGET,
-                wgpu::TextureUsages::RENDER_ATTACHMENT,
-                wgpu::TextureUses::UNINITIALIZED,
-            )?;
+            
+            let texture = if use_egl_fallback {
+                // Use EGL DMA-BUF import for zero-copy rendering on GL backend
+                let egl_texture = unsafe {
+                    DmaBufEglTexture::import(
+                        device,
+                        fd,
+                        w,
+                        h,
+                        modifier,
+                        bo.stride_for_plane(0),
+                        bo.offset(0),
+                    )?
+                };
+                egl_texture.texture().clone()
+            } else {
+                // Use Vulkan DMA-BUF import
+                pleamar::gpu::Gpu::import_dmabuf(
+                    device,
+                    fd,
+                    (w, h),
+                    modifier,
+                    bo.stride_for_plane(0),
+                    bo.offset(0),
+                    wgpu::TextureUses::COLOR_TARGET,
+                    wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    wgpu::TextureUses::UNINITIALIZED,
+                )?
+            };
+            
             let flags = if bo.modifier() == gbm::Modifier::Invalid { FbCmd2Flags::empty() } else { FbCmd2Flags::MODIFIERS };
             let fb = self.drm.add_planar_framebuffer(&bo, flags).map_err(|e| format!("the monitor does not take the buffer: {e}"))?;
             self.buffers.push(Buffer { _bo: bo, fb, texture });

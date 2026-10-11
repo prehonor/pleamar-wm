@@ -14,6 +14,8 @@
   systemdLibs,
   libgbm,
   libdrm,
+  mesa,
+  libglvnd,
   vulkan-loader,
   fontconfig,
   xwayland,
@@ -57,6 +59,8 @@ rustPlatform.buildRustPackage {
     systemdLibs
     libgbm
     libdrm
+    mesa
+    libglvnd
     pam
     pipewire
     # `pleamar-wm remote`'s direct way (WebRTC) encrypts with it.

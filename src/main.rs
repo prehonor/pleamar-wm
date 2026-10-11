@@ -19,6 +19,7 @@ mod probe;
 mod route;
 mod screen;
 mod session;
+mod dma_buf_egl;
 
 fn main() {
     pleamar::provide_windows(|max, to_render| {

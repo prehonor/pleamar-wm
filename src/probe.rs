@@ -7,13 +7,22 @@ use smithay::reexports::gbm;
 use std::os::fd::OwnedFd;
 
 pub fn run() -> Result<(), String> {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor { backends: wgpu::Backends::VULKAN, ..wgpu::InstanceDescriptor::new_without_display_handle() });
-    let gpu = pleamar::gpu::Gpu::new(&instance, None);
+    // Try Vulkan first, then fall back to GL for EGL DMA-BUF import
+    let (gpu, backend) = try_vulkan().map(|g| (g, wgpu::Backend::Vulkan))
+        .or_else(|e| {
+            println!("probe · Vulkan failed: {e}, trying GL backend");
+            try_gl().map(|g| (g, wgpu::Backend::Gl))
+        })?;
+
+    println!("probe · using {:?} backend", backend);
+
     let modifiers = gpu.render_modifiers().to_vec();
     println!("probe · the card paints BGRA in {} layouts: {:x?}", modifiers.len(), modifiers);
+
     let node: OwnedFd = std::fs::OpenOptions::new().read(true).write(true).open("/dev/dri/renderD128").map_err(|e| format!("no render node: {e}"))?.into();
     let device = gbm::Device::new(node).map_err(|e| format!("no gbm: {e}"))?;
     let (w, h) = (1920u32, 1080u32);
+
     // A card that cannot be told a layout: the buffer as its driver lays it out.
     let unlaid = pleamar::dmabuf::without_layouts(gpu.device(), &modifiers);
     let uses = gbm::BufferObjectFlags::SCANOUT | gbm::BufferObjectFlags::RENDERING;
@@ -27,8 +36,34 @@ pub fn run() -> Result<(), String> {
     let said: u64 = bo.modifier().into();
     let modifier: u64 = if unlaid { pleamar::dmabuf::NO_LAYOUT } else { said };
     println!("probe · a buffer for the screen: modifier {said:#x}, stride {}", bo.stride_for_plane(0));
+
+    // Import DMA-BUF: use EGL fallback for GL backend
+    let use_egl_fallback = backend == wgpu::Backend::Gl;
     let fd = bo.fd_for_plane(0).map_err(|e| e.to_string())?;
-    let texture = pleamar::gpu::Gpu::import_dmabuf(gpu.device(), fd, (w, h), modifier, bo.stride_for_plane(0), bo.offset(0), wgpu::TextureUses::COLOR_TARGET, wgpu::TextureUsages::RENDER_ATTACHMENT, wgpu::TextureUses::UNINITIALIZED)?;
+    let texture = if use_egl_fallback {
+        println!("probe · using EGL DMA-BUF import for zero-copy rendering");
+        let egl_texture = unsafe {
+            crate::dma_buf_egl::DmaBufEglTexture::import(
+                gpu.device(),
+                fd,
+                w,
+                h,
+                modifier,
+                bo.stride_for_plane(0),
+                bo.offset(0),
+            )?
+        };
+        egl_texture.texture().clone()
+    } else {
+        pleamar::gpu::Gpu::import_dmabuf(
+            gpu.device(), fd, (w, h), modifier,
+            bo.stride_for_plane(0), bo.offset(0),
+            wgpu::TextureUses::COLOR_TARGET,
+            wgpu::TextureUsages::RENDER_ATTACHMENT,
+            wgpu::TextureUses::UNINITIALIZED,
+        )?
+    };
+
     println!("probe · read into wgpu as a place to paint in");
     let view = texture.create_view(&Default::default());
     let mut encoder = gpu.device().create_command_encoder(&Default::default());
@@ -50,10 +85,32 @@ pub fn run() -> Result<(), String> {
     let index = gpu.queue().submit(Some(encoder.finish()));
     let _ = gpu.device().poll(wgpu::PollType::Wait { submission_index: Some(index), timeout: Some(std::time::Duration::from_secs(2)) });
     println!("probe · painted");
-    // Read back through a second, separate import of the same memory: what
-    // anyone else holding the buffer —the monitor— sees.
+
+    // Read back through a second, separate import of the same memory
     let fd = bo.fd_for_plane(0).map_err(|e| e.to_string())?;
-    let other = pleamar::gpu::Gpu::import_dmabuf(gpu.device(), fd, (w, h), modifier, bo.stride_for_plane(0), bo.offset(0), wgpu::TextureUses::COPY_SRC, wgpu::TextureUsages::COPY_SRC, wgpu::TextureUses::COPY_SRC)?;
+    let other = if use_egl_fallback {
+        let egl_texture = unsafe {
+            crate::dma_buf_egl::DmaBufEglTexture::import(
+                gpu.device(),
+                fd,
+                w,
+                h,
+                modifier,
+                bo.stride_for_plane(0),
+                bo.offset(0),
+            )?
+        };
+        egl_texture.texture().clone()
+    } else {
+        pleamar::gpu::Gpu::import_dmabuf(
+            gpu.device(), fd, (w, h), modifier,
+            bo.stride_for_plane(0), bo.offset(0),
+            wgpu::TextureUses::COPY_SRC,
+            wgpu::TextureUsages::COPY_SRC,
+            wgpu::TextureUses::COPY_SRC,
+        )?
+    };
+
     let out = gpu.device().create_buffer(&wgpu::BufferDescriptor { label: None, size: 256, usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ, mapped_at_creation: false });
     let mut encoder = gpu.device().create_command_encoder(&Default::default());
     encoder.copy_texture_to_buffer(
@@ -67,4 +124,28 @@ pub fn run() -> Result<(), String> {
     let pixel = out.slice(..4).get_mapped_range().map_err(|e| format!("{e:?}"))?.to_vec();
     println!("probe · a pixel of the buffer, read apart (B, G, R, X): {pixel:?} — expected about [255, 127/128, 0, 255]");
     Ok(())
+}
+
+fn try_vulkan() -> Result<pleamar::gpu::Gpu, String> {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::VULKAN,
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    });
+    let gpu = pleamar::gpu::Gpu::new(&instance, None);
+    // If no modifiers are supported, Vulkan DMA-BUF import will not work.
+    // This is the case on AMD Polaris10 (RADV), which lacks VK_EXT_external_memory_dma_buf.
+    let modifiers = gpu.render_modifiers();
+    if modifiers.is_empty() {
+        return Err("Vulkan adapter reports no DMA-BUF modifiers, DMA-BUF import will fail".into());
+    }
+    Ok(gpu)
+}
+
+fn try_gl() -> Result<pleamar::gpu::Gpu, String> {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::GL,
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    });
+    let gpu = pleamar::gpu::Gpu::new(&instance, None);
+    Ok(gpu)
 }
