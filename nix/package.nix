@@ -98,6 +98,8 @@ rustPlatform.buildRustPackage {
           vulkan-loader
           wayland
           libxkbcommon
+          mesa
+          libglvnd
         ]
       } \
       --prefix PATH : ${

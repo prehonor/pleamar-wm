@@ -10,26 +10,23 @@
         ]
       },
       "locked": {
-        "lastModified": 1791324272,
-        "narHash": "sha256-L3RjJb+E0cHUtg25zV6kYA7miVdjbTg/4hTUGiHzSmk=",
-        "owner": "k4ditano",
-        "repo": "marea-plm",
-        "rev": "0e23c6ce597644ba61d05a6931b9d50bdfa0d345",
-        "type": "github"
+        "lastModified": 1791793841,
+        "narHash": "sha256-DTCJWC5MN95gpTyl5WXmSsT3sk84ECwGA8YhSZ1QK6Q=",
+        "path": "/space/github/devshell/marea-plm",
+        "type": "path"
       },
       "original": {
-        "owner": "k4ditano",
-        "repo": "marea-plm",
-        "type": "github"
+        "path": "/space/github/devshell/marea-plm",
+        "type": "path"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1791426274,
-        "narHash": "sha256-MWhktfFtFE8Jl7bf9Pkp7TR5MSdYCjCswSo0Gkb4ywc=",
+        "lastModified": 1791765022,
+        "narHash": "sha256-ZGq3ptZzA+oO0N/Wi/F+GbuTijLkYExD01LvpNFAvr0=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "7c8764b7c7b09b34f632464276218ef9090eaa11",
+        "rev": "7993f34ee47e28a3d607a525aadc6c94b73be728",
         "type": "github"
       },
       "original": {
@@ -46,18 +43,14 @@
         ]
       },
       "locked": {
-        "lastModified": 1791620200,
-        "narHash": "sha256-dLYdVMRTzh0M0lax5wu7M7UaYkc/ItZ6mRB2QqevJxY=",
-        "owner": "k4ditano",
-        "repo": "pleamar",
-        "rev": "7431fb5c1253df3563da78784b4f0dcff0631d35",
-        "type": "github"
+        "lastModified": 1791944327,
+        "narHash": "sha256-PF4XPF+ToJR9PdurQuTJ4sUR2QhX6+MZPO1a2suBkXQ=",
+        "path": "/space/github/devshell/pleamar",
+        "type": "path"
       },
       "original": {
-        "owner": "k4ditano",
-        "ref": "no-layouts",
-        "repo": "pleamar",
-        "type": "github"
+        "path": "/space/github/devshell/pleamar",
+        "type": "path"
       }
     },
     "root": {

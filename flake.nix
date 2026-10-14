@@ -4,11 +4,12 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     pleamar = {
-      url = "github:k4ditano/pleamar/no-layouts";
+      url = "path:/space/github/devshell/pleamar";
+      # url = "github:prehonor/pleamar/no-layouts";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     marea = {
-      url = "github:k4ditano/marea-plm";
+      url = "path:/space/github/devshell/marea-plm";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.pleamar.follows = "pleamar";
     };
@@ -45,6 +46,14 @@
           };
         }
       );
+
+      # Development shell
+
+      devShells = forAll (system: pkgs: {
+        default = pkgs.mkShell {
+          inputsFrom = [ self.packages.${system}.pleamar-wm ];
+        };
+      });
 
       # NixOS: `programs.pleamar-wm.enable = true;`
       nixosModules.default = import ./nix/nixos.nix self;

@@ -3205,25 +3205,84 @@ impl XdgShellHandler for State {
 }
 
 impl XdgDecorationHandler for State {
-    // The scene draws the frame: the programs are asked not to.
+    // Respect the client's preference: default to client-side (let the client draw its own frame).
+    // The client can request server-side via request_mode if it really wants us to draw the frame.
     fn new_decoration(&mut self, toplevel: ToplevelSurface) {
-        toplevel.with_pending_state(|s| s.decoration_mode = Some(DecorationMode::ServerSide));
+        // Default to client-side: modern apps (Chrome, Firefox, GTK4) prefer to draw their own title bar.
+        let mode = toplevel.with_pending_state(|s| s.decoration_mode);
+        let server_side = mode.map(|m| m == DecorationMode::ServerSide).unwrap_or(false);
+        let (app, title) = with_states(toplevel.wl_surface(), |s| {
+            let d = s.data_map.get::<XdgToplevelSurfaceData>().map(|d| d.lock().unwrap());
+            d.map_or((String::new(), String::new()), |d| (d.app_id.clone().unwrap_or_default(), d.title.clone().unwrap_or_default()))
+        });
+        eprintln!("nest · xdg new_decoration: app={app:?} title={title:?} client prefers {mode:?}, using server_side={server_side} (client draws title={})", !server_side);
+        toplevel.with_pending_state(|s| s.decoration_mode = Some(if server_side { DecorationMode::ServerSide } else { DecorationMode::ClientSide }));
         if toplevel.is_initial_configure_sent() {
             toplevel.send_pending_configure();
         }
-        // It lets the scene draw its frame (the scene is told when it has a slot).
         let surface = toplevel.wl_surface().clone();
-        if self.decorated.insert(surface.clone()) {
-            if let Some(slot) = self.window_of(&surface) {
-                self.tell(NestEvent::Framed(slot, true));
+        if server_side {
+            if self.decorated.insert(surface.clone()) {
+                if let Some(slot) = self.window_of(&surface) {
+                    self.tell(NestEvent::Framed(slot, true));
+                }
+            }
+        } else {
+            let changed = self.decorated.remove(&surface);
+            if changed {
+                if let Some(slot) = self.window_of(&surface) {
+                    self.tell(NestEvent::Framed(slot, false));
+                }
             }
         }
     }
-    fn request_mode(&mut self, toplevel: ToplevelSurface, _: DecorationMode) {
-        XdgDecorationHandler::new_decoration(self, toplevel);
+    fn request_mode(&mut self, toplevel: ToplevelSurface, mode: DecorationMode) {
+        // The client explicitly requests a mode: respect it.
+        let (app, title) = with_states(toplevel.wl_surface(), |s| {
+            let d = s.data_map.get::<XdgToplevelSurfaceData>().map(|d| d.lock().unwrap());
+            d.map_or((String::new(), String::new()), |d| (d.app_id.clone().unwrap_or_default(), d.title.clone().unwrap_or_default()))
+        });
+        let server_side = mode == DecorationMode::ServerSide;
+        eprintln!("nest · xdg request_mode: app={app:?} title={title:?} client requests {mode:?} (client draws title={})", !server_side);
+        toplevel.with_pending_state(|s| s.decoration_mode = Some(mode));
+        if toplevel.is_initial_configure_sent() {
+            toplevel.send_pending_configure();
+        }
+        let surface = toplevel.wl_surface().clone();
+        let server_side = mode == DecorationMode::ServerSide;
+        if server_side {
+            if self.decorated.insert(surface.clone()) {
+                if let Some(slot) = self.window_of(&surface) {
+                    self.tell(NestEvent::Framed(slot, true));
+                }
+            }
+        } else {
+            let changed = self.decorated.remove(&surface);
+            if changed {
+                if let Some(slot) = self.window_of(&surface) {
+                    self.tell(NestEvent::Framed(slot, false));
+                }
+            }
+        }
     }
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
-        XdgDecorationHandler::new_decoration(self, toplevel);
+        // Client unsets its preference: fall back to client-side.
+        let (app, title) = with_states(toplevel.wl_surface(), |s| {
+            let d = s.data_map.get::<XdgToplevelSurfaceData>().map(|d| d.lock().unwrap());
+            d.map_or((String::new(), String::new()), |d| (d.app_id.clone().unwrap_or_default(), d.title.clone().unwrap_or_default()))
+        });
+        eprintln!("nest · xdg unset_mode: app={app:?} title={title:?} falling back to ClientSide (client draws title=true)");
+        toplevel.with_pending_state(|s| s.decoration_mode = Some(DecorationMode::ClientSide));
+        if toplevel.is_initial_configure_sent() {
+            toplevel.send_pending_configure();
+        }
+        let surface = toplevel.wl_surface().clone();
+        let changed = self.decorated.remove(&surface);
+        if changed {
+            if let Some(slot) = self.window_of(&surface) {
+                self.tell(NestEvent::Framed(slot, false));
+            }
+        }
     }
 }
 
@@ -3234,8 +3293,16 @@ impl KdeDecorationHandler for State {
     fn kde_decoration_state(&self) -> &KdeDecorationState {
         &self.kde_decorations
     }
-    fn new_decoration(&mut self, _: &WlSurface, decoration: &smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::OrgKdeKwinServerDecoration) {
+    fn new_decoration(&mut self, surface: &WlSurface, decoration: &smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::OrgKdeKwinServerDecoration) {
+        // Default to server-side, but let the client change it later via request_mode.
         decoration.mode(smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::Mode::Server);
+        let (app, title) = self.window_of(surface).and_then(|s| self.slots[s].as_ref()).map(|w| (w.app.clone(), w.title.clone())).unwrap_or_default();
+        eprintln!("nest · kde new_decoration: app={app:?} title={title:?} defaulting to Server (client draws title=false)");
+        if self.decorated.insert(surface.clone()) {
+            if let Some(slot) = self.window_of(surface) {
+                self.tell(NestEvent::Framed(slot, true));
+            }
+        }
     }
     // The program says which it takes: the scene is told whether to frame it.
     fn request_mode(&mut self, surface: &WlSurface, decoration: &smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::OrgKdeKwinServerDecoration, mode: smithay::reexports::wayland_server::WEnum<smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::Mode>) {
@@ -3243,6 +3310,8 @@ impl KdeDecorationHandler for State {
         let smithay::reexports::wayland_server::WEnum::Value(mode) = mode else { return };
         decoration.mode(mode);
         let framed = mode == Mode::Server;
+        let (app, title) = self.window_of(surface).and_then(|s| self.slots[s].as_ref()).map(|w| (w.app.clone(), w.title.clone())).unwrap_or_default();
+        eprintln!("nest · kde request_mode: app={app:?} title={title:?} mode={mode:?} (client draws title={})", !framed);
         let changed = if framed { self.decorated.insert(surface.clone()) } else { self.decorated.remove(surface) };
         if changed {
             if let Some(slot) = self.window_of(surface) {

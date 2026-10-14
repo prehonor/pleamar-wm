@@ -103,10 +103,10 @@ scene Session {
     // then it reads 0, 0: the first monitor's corner. Taken for a real
     // place, Marea on the second monitor was told the mouse had gone to the
     // first the moment it came onto her, and left.)
-    on change pointer.x + pointer.y * 8192 while pointer.x >= 0 and pointer.x < W and pointer.y >= 0 and pointer.y < H and pointer.x + pointer.y > 0 {
-        mon = screen.index
+    on change pointer.x + pointer.y * 8192 while pointer.x + pointer.y > 0 {
         mouse.x = pointer.x
         mouse.y = pointer.y
+        mon = if(pointer.x < mx.1, 0, if(pointer.x < mx.2, 1, if(pointer.x < mx.3, 2, 3)))
     }
     prop ov = 0 ~calm
     follow ov = if(overview, 1, 0)
@@ -6336,7 +6336,7 @@ scene Session {
         //  the tiles (`float`, Super+V). Floating, it is as a free one: a place
         //  of its own, a title bar, carried and resized; the others close up.
         let Fm = pick(sc, free.0, free.1, free.2, free.3)
-        let F = if(win.$i.floating, 1, Fm)
+        let F = if(win.$i.floating, if(win.$i.framed > 0.5, 1, 0), Fm)
         // (Only once it has a place of its own on this monitor: the frame free
         // is taken, it has none yet, and it headed for the corner.)
         let fr = F > 0.5 and fw.$i > 0.5 and fsc.$i == sc and not win.$i.fullscreen and not win.$i.dialog
@@ -6534,6 +6534,24 @@ scene Session {
             maxed.$i = 0
             tmax.$i = 0
         }
+        // 客户端自绘拖拽发起：Held 事件让 win.$i.held 从 0 变 1
+        on change win.$i.held while win.$i.held > 0.5 and win.$i.framed < 0.5 and keys.super < 0.5 and screen.index == mon {
+            dragging = i
+            grab.x = pointer.x - x.$i
+            grab.y = pointer.y - y.$i
+        }
+        // 客户端自绘拖拽松手：停在松手位置（free release 逻辑）
+        on change win.$i.held while win.$i.held < 0.5 and dragging == i and win.$i.framed < 0.5 and keys.super < 0.5 and screen.index == mon {
+            dragging = -1
+            fx.$i = mouse.x - grab.x
+            fy.$i = max(mouse.y - grab.y, pick(mon, win.reserved.0.top, win.reserved.1.top, win.reserved.2.top, win.reserved.3.top))
+            fsc.$i = mon
+            maxed.$i = 0
+            x.$i: mouse.x - grab.x ~0ms
+            y.$i: max(mouse.y - grab.y, pick(mon, win.reserved.0.top, win.reserved.1.top, win.reserved.2.top, win.reserved.3.top)) ~0ms
+            dx.$i: 0 ~0ms
+            dy.$i: 0 ~0ms
+        }
         // Carried or being resized when it goes —closed, put away—: nothing
         // is carried any more (the release would never come to it).
         on change win.$i.open while not win.$i.open and dragging == i { dragging = -1 }
@@ -6658,10 +6676,10 @@ scene Session {
             // above it, which takes nothing from the program.
             // With Super held, all of it.
             let whole = keys.super > 0.5 or dragging == i
-            zone box title.$i { from: x.$i + if(whole or F > 0.5, 0, 12), y.$i - if(whole or F > 0.5, 0, gap - 1); size: if(whole, w, if(F > 0.5, w - 76, w - 24)), if(whole, h, if(F > 0.5, tb, gap - 2)); cursor: pointer; active: here and not overview and not win.$i.dialog; label: "{win.$i.title}"; role: button }
-            zone ellipse lead_zone.$i { at: x + w - 40, y + tb / 2; radius: 10; cursor: pointer; active: here and not overview and not win.$i.dialog and F > 0.5; label: "Enlarge {win.$i.title}" }
-            zone ellipse mini_zone.$i { at: x + w - 60, y + tb / 2; radius: 10; cursor: pointer; active: here and not overview and not win.$i.dialog and Fm > 0.5; label: "Minimize {win.$i.title}" }
-            zone ellipse close_zone.$i { at: x + w - 20, y + tb / 2; radius: 10; cursor: pointer; active: here and not overview and not win.$i.dialog and F > 0.5; label: "Close {win.$i.title}" }
+            zone box title.$i { from: x.$i + if(whole or F > 0.5, 0, 12), y.$i - if(whole or F > 0.5, 0, gap - 1); size: if(whole, w, if(F > 0.5, w - 76, w - 24)), if(whole, h, if(F > 0.5, tb, gap - 2)); cursor: pointer; active: here and not overview and not win.$i.dialog and (win.$i.framed > 0.5 or keys.super > 0.5); label: "{win.$i.title}"; role: button }
+            zone ellipse lead_zone.$i { at: x + w - 40, y + tb / 2; radius: 10; cursor: pointer; active: here and not overview and not win.$i.dialog and (win.$i.framed > 0.5 or keys.super > 0.5) and F > 0.5; label: "Enlarge {win.$i.title}" }
+            zone ellipse mini_zone.$i { at: x + w - 60, y + tb / 2; radius: 10; cursor: pointer; active: here and not overview and not win.$i.dialog and (win.$i.framed > 0.5 or keys.super > 0.5) and Fm > 0.5; label: "Minimize {win.$i.title}" }
+            zone ellipse close_zone.$i { at: x + w - 20, y + tb / 2; radius: 10; cursor: pointer; active: here and not overview and not win.$i.dialog and (win.$i.framed > 0.5 or keys.super > 0.5) and F > 0.5; label: "Close {win.$i.title}" }
             // At a glance, the whole window is a button: pressing it chooses it.
             zone box choose.$i { from: x, y; size: w, h; cursor: pointer; active: here and overview and not win.$i.dialog; label: "{win.$i.title}"; role: item }
             // Free: its edges and its corner make it bigger or smaller.
@@ -6698,27 +6716,27 @@ scene Session {
             group {
                 show: wet <= 0.001 and cold <= 0.001
                 clip box { from: x, y; size: w, h; corner: 12 }
-                box { from: x, y; size: w, tb * hb.$i; color: mix(#1a1e22, #1d2b27, lit.$i); show: hb.$i > 0.01 }
-                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 110, 10); lines: 1; color: ink; opacity: (55% + 45% * lit.$i) * hb.$i; show: hb.$i > 0.01 }
-                window win.$i { at: x, y + tb * hb.$i; size: w, max(h - tb * hb.$i, 1); ask: goal.w, goal.h - tb * (F > 0.5); show: drawn and not win.$i.fullscreen and wet <= 0.001 and cold <= 0.001 }
+                box { from: x, y; size: w, tb * hb.$i; color: mix(#1a1e22, #1d2b27, lit.$i); show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 110, 10); lines: 1; color: ink; opacity: (55% + 45% * lit.$i) * hb.$i; show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                window win.$i { at: x, y + tb * hb.$i * (win.$i.framed > 0.5); size: w, max(h - tb * hb.$i, 1); ask: goal.w, goal.h - tb * (F > 0.5) * (win.$i.framed > 0.5); show: drawn and not win.$i.fullscreen and wet <= 0.001 and cold <= 0.001 }
             }
             // The same, in the rain: the window seen through wet glass.
             group {
                 show: wet > 0.001
                 shader: rain, wet * pour
                 clip box { from: x, y; size: w, h; corner: 12 }
-                box { from: x, y; size: w, tb * hb.$i; color: mix(#1a1e22, #1d2b27, lit.$i); show: hb.$i > 0.01 }
-                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 110, 10); lines: 1; color: ink; opacity: (55% + 45% * lit.$i) * hb.$i; show: hb.$i > 0.01 }
-                window win.$i { at: x, y + tb * hb.$i; size: w, max(h - tb * hb.$i, 1); ask: goal.w, goal.h - tb * (F > 0.5); show: drawn and not win.$i.fullscreen and wet > 0.001 }
+                box { from: x, y; size: w, tb * hb.$i; color: mix(#1a1e22, #1d2b27, lit.$i); show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 110, 10); lines: 1; color: ink; opacity: (55% + 45% * lit.$i) * hb.$i; show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                window win.$i { at: x, y + tb * hb.$i * (win.$i.framed > 0.5); size: w, max(h - tb * hb.$i, 1); ask: goal.w, goal.h - tb * (F > 0.5) * (win.$i.framed > 0.5); show: drawn and not win.$i.fullscreen and wet > 0.001 }
             }
             // And in the snow: frosted glass with snow on top.
             group {
                 show: cold > 0.001 and wet <= 0.001
                 shader: snow, cold
                 clip box { from: x, y; size: w, h; corner: 12 }
-                box { from: x, y; size: w, tb * hb.$i; color: mix(#1a1e22, #1d2b27, lit.$i); show: hb.$i > 0.01 }
-                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 110, 10); lines: 1; color: ink; opacity: (55% + 45% * lit.$i) * hb.$i; show: hb.$i > 0.01 }
-                window win.$i { at: x, y + tb * hb.$i; size: w, max(h - tb * hb.$i, 1); ask: goal.w, goal.h - tb * (F > 0.5); show: drawn and not win.$i.fullscreen and cold > 0.001 and wet <= 0.001 }
+                box { from: x, y; size: w, tb * hb.$i; color: mix(#1a1e22, #1d2b27, lit.$i); show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 110, 10); lines: 1; color: ink; opacity: (55% + 45% * lit.$i) * hb.$i; show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                window win.$i { at: x, y + tb * hb.$i * (win.$i.framed > 0.5); size: w, max(h - tb * hb.$i, 1); ask: goal.w, goal.h - tb * (F > 0.5) * (win.$i.framed > 0.5); show: drawn and not win.$i.fullscreen and cold > 0.001 and wet <= 0.001 }
             }
             // (The wave: two soft crests of light, the second behind the first.)
             group {
@@ -6736,7 +6754,7 @@ scene Session {
             let by = y + tb / 2
             let b.any = max(max(mini_zone.$i.hover, lead_zone.$i.hover), close_zone.$i.hover)
             group {
-                show: hb.$i > 0.01
+                show: hb.$i > 0.01 and win.$i.framed > 0.5
                 opacity: (45% + 55% * max(lit.$i, b.any)) * hb.$i
                 ellipse { at: x + w - 60, by; radius: 8 + 3 * mini_zone.$i.hover; stroke: 1.2; color: amber; opacity: 55% * mini_zone.$i.hover }
                 ellipse { at: x + w - 40, by; radius: 8 + 3 * lead_zone.$i.hover; stroke: 1.2; color: mint; opacity: 55% * lead_zone.$i.hover }
@@ -7126,7 +7144,7 @@ scene Session {
     // crossing from one to the other it is seen half on each.
     repeat i in 0..16 {
         // Monitor 1 starts where monitor 0 ends.
-        let x = mouse.x + pick(mon, mx.0, mx.1, mx.2, mx.3) - pick(screen.index, mx.0, mx.1, mx.2, mx.3) - grab.x
+        let x = mouse.x - pick(screen.index, mx.0, mx.1, mx.2, mx.3) - grab.x
         let y = mouse.y - grab.y
         let w = w.$i
         let h = h.$i
@@ -7144,27 +7162,27 @@ scene Session {
             group {
                 show: wet <= 0.001 and cold <= 0.001
                 clip box { from: x, y; size: w, h; corner: 12 }
-                box { from: x, y; size: w, tb * hb.$i; color: #1d2b27; show: hb.$i > 0.01 }
-                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 90, 10); lines: 1; color: ink; opacity: hb.$i; show: hb.$i > 0.01 }
-                window win.$i { at: x, y + tb * hb.$i; size: w, max(h - tb * hb.$i, 1); ask: win.$i.width, win.$i.height; show: carried and wet <= 0.001 and cold <= 0.001 }
+                box { from: x, y; size: w, tb * hb.$i; color: #1d2b27; show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 90, 10); lines: 1; color: ink; opacity: hb.$i; show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                window win.$i { at: x, y + tb * hb.$i * (win.$i.framed > 0.5); size: w, max(h - tb * hb.$i, 1); ask: win.$i.width, win.$i.height; show: carried and wet <= 0.001 and cold <= 0.001 }
             }
             // Carried in the rain, its water goes with it, lagging behind.
             group {
                 show: wet > 0.001
                 shader: rain, wet * pour, mouse.x - lag.x, mouse.y - lag.y
                 clip box { from: x, y; size: w, h; corner: 12 }
-                box { from: x, y; size: w, tb * hb.$i; color: #1d2b27; show: hb.$i > 0.01 }
-                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 90, 10); lines: 1; color: ink; opacity: hb.$i; show: hb.$i > 0.01 }
-                window win.$i { at: x, y + tb * hb.$i; size: w, max(h - tb * hb.$i, 1); ask: win.$i.width, win.$i.height; show: carried and wet > 0.001 }
+                box { from: x, y; size: w, tb * hb.$i; color: #1d2b27; show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 90, 10); lines: 1; color: ink; opacity: hb.$i; show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                window win.$i { at: x, y + tb * hb.$i * (win.$i.framed > 0.5); size: w, max(h - tb * hb.$i, 1); ask: win.$i.width, win.$i.height; show: carried and wet > 0.001 }
             }
             // And in the snow, its snow and its frost.
             group {
                 show: cold > 0.001 and wet <= 0.001
                 shader: snow, cold, mouse.x - lag.x, mouse.y - lag.y
                 clip box { from: x, y; size: w, h; corner: 12 }
-                box { from: x, y; size: w, tb * hb.$i; color: #1d2b27; show: hb.$i > 0.01 }
-                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 90, 10); lines: 1; color: ink; opacity: hb.$i; show: hb.$i > 0.01 }
-                window win.$i { at: x, y + tb * hb.$i; size: w, max(h - tb * hb.$i, 1); ask: win.$i.width, win.$i.height; show: carried and cold > 0.001 and wet <= 0.001 }
+                box { from: x, y; size: w, tb * hb.$i; color: #1d2b27; show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 90, 10); lines: 1; color: ink; opacity: hb.$i; show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                window win.$i { at: x, y + tb * hb.$i * (win.$i.framed > 0.5); size: w, max(h - tb * hb.$i, 1); ask: win.$i.width, win.$i.height; show: carried and cold > 0.001 and wet <= 0.001 }
             }
             box { from: x, y; size: w, h; corner: 12; stroke: 1.5; color: mint; opacity: 80% }
         }
@@ -7375,12 +7393,12 @@ scene Session {
             }
             group {
                 clip box { from: x, y; size: w, h; corner: round }
-                box { from: x, y; size: w, tb * hb.$i; color: #1d2b27; show: hb.$i > 0.01 }
-                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 110, 10); lines: 1; color: ink; opacity: hb.$i; show: hb.$i > 0.01 }
+                box { from: x, y; size: w, tb * hb.$i; color: #1d2b27; show: hb.$i > 0.01 and win.$i.framed > 0.5 }
+                text win.$i.title { at: x + 14, y + tb / 2 - tb * (1 - hb.$i); anchor: left center; size: 12; weight: 500; width: max(w - 110, 10); lines: 1; color: ink; opacity: hb.$i; show: hb.$i > 0.01 and win.$i.framed > 0.5 }
                 // Its program keeps the size it has while it shrinks into the drop: the
                 // picture is scaled, not the program asked (a browser asked for
                 // 60 × 4 froze).
-                window win.$i { at: x, y + tb * hb.$i; size: w, max(h - tb * hb.$i, 1); ask: win.$i.width, win.$i.height }
+                window win.$i { at: x, y + tb * hb.$i * (win.$i.framed > 0.5); size: w, max(h - tb * hb.$i, 1); ask: win.$i.width, win.$i.height }
                 body {
                     gradient: x, y to x, y + h, #2b3030, marea 55%, #0e0f0f
                     opacity: 96% * q
