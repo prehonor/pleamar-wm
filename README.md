@@ -8,6 +8,7 @@
 ![Badge Language]
 ![Badge Commit]
 [![Badge Issues]][Issues]
+[![Badge Discord]][Discord]
 [![Badge X]][X]
 [![Badge Ko-fi]][Ko-fi]
 
@@ -27,12 +28,29 @@ the open windows without closing anything.
 **[<kbd> <br> Keys <br> </kbd>][Keys]**
 **[<kbd> <br> pleamar <br> </kbd>][pleamar]**
 **[<kbd> <br> Marea <br> </kbd>][Marea]**
+**[<kbd> <br> Discord <br> </kbd>][Discord]**
 
 ---
 
 <br>
 
 </div>
+
+# What's new
+
+- **Your session in your pocket** (0.3): this desktop on a phone or a tablet, in
+  any browser, with its own video straight from the card.
+- **Your agent gets hands of its own** (0.3): a pointer and a keyboard apart
+  from yours, its windows beside yours, and a «Stop» always in sight.
+- **GTK 3 programs leave their frame to the scene** (0.3.3): Firefox and Zen
+  among them, through KDE's server decoration protocol.
+- **`keys.conf` is read again when it changes** (0.3.3): a new binding works
+  without logging in again.
+- **Qt programs get their theme** (0.3.6): the session reads your UWSM
+  environment, as Hyprland does. And a program that asks to come forward
+  without you behind it asks for attention instead.
+
+Every release, with what changed: [Releases].
 
 # Features
 
@@ -112,6 +130,20 @@ the open windows without closing anything.
 
 # Gallery
 
+<br>
+
+<img src="assets/agent.webp" width="860" alt="An AI agent using the desktop with a cursor and a keyboard of its own">
+
+<sub>An agent with a pointer and a keyboard of its own: it opens its windows beside yours, every move is seen, and you can stop it at any time.</sub>
+
+<br>
+<br>
+
+<img src="assets/remote.webp" width="860" alt="The session on a phone or a tablet, from a browser">
+
+<sub>Your session on a phone or a tablet: any browser, nothing to install.</sub>
+
+<br>
 <br>
 
 ![Preview Tiled]
@@ -522,7 +554,8 @@ pleamar-wm is under the [BSD 3-Clause License][License], like Hyprland.
 
 Contributions are welcome, made with AI or without it: see the [AI policy](AI_POLICY.md).
 
-Made by **[@k4ditano][X]** — follow along on X for what comes next.
+Made by **[@k4ditano][X]** — follow along on X for what comes next, and come
+and say hi, ask or show what you made on **[Discord]**.
 If it makes your desktop nicer, you can **[buy me a coffee on Ko-fi][Ko-fi]** ☕
 
 <!----------------------------------------------------------------------------->
@@ -534,8 +567,10 @@ If it makes your desktop nicer, you can **[buy me a coffee on Ko-fi][Ko-fi]** �
 [Marea]: https://github.com/k4ditano/marea-plm
 [License]: LICENSE
 [X]: https://x.com/k4ditano
+[Discord]: https://discord.gg/N7kbYC49b2
 [Ko-fi]: https://ko-fi.com/k4ditano
 [Issues]: https://github.com/k4ditano/pleamar-wm/issues
+[Releases]: https://github.com/k4ditano/pleamar-wm/releases
 
 <!----------------------------------{ Thanks }--------------------------------->
 
@@ -553,5 +588,6 @@ If it makes your desktop nicer, you can **[buy me a coffee on Ko-fi][Ko-fi]** �
 [Badge Language]: https://img.shields.io/badge/made%20with-Rust%20%2B%20pleamar-2c7684?style=flat-square
 [Badge Commit]: https://img.shields.io/github/last-commit/k4ditano/pleamar-wm?style=flat-square&color=9ed6bd
 [Badge Issues]: https://img.shields.io/github/issues/k4ditano/pleamar-wm?style=flat-square&color=2c7684
+[Badge Discord]: https://img.shields.io/badge/chat-Discord-5865f2?style=flat-square&logo=discord&logoColor=white
 [Badge X]: https://img.shields.io/badge/follow-@k4ditano-000000?style=flat-square&logo=x
 [Badge Ko-fi]: https://img.shields.io/badge/support-Ko--fi-ff5e5b?style=flat-square&logo=ko-fi&logoColor=white

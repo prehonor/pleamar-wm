@@ -10,8 +10,8 @@
         ]
       },
       "locked": {
-        "lastModified": 1791793841,
-        "narHash": "sha256-DTCJWC5MN95gpTyl5WXmSsT3sk84ECwGA8YhSZ1QK6Q=",
+        "lastModified": 1791967894,
+        "narHash": "sha256-RwoifIM0bNp+6H9Uvyz81G7hRUIGvA60YaAfWiPFY6g=",
         "path": "/space/github/devshell/marea-plm",
         "type": "path"
       },
@@ -43,8 +43,8 @@
         ]
       },
       "locked": {
-        "lastModified": 1791944327,
-        "narHash": "sha256-PF4XPF+ToJR9PdurQuTJ4sUR2QhX6+MZPO1a2suBkXQ=",
+        "lastModified": 1791968887,
+        "narHash": "sha256-YjUB6XFL/FKoRLaeOuliBL2Xxz4TAtpoGvEJ1u//+0o=",
         "path": "/space/github/devshell/pleamar",
         "type": "path"
       },
